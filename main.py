@@ -14,7 +14,6 @@ TRANSFORMER_INPUT_FILE = SCRAPER_FILE
 TRANSFORMER_OUTPUT_FILE = "transform.json"
 SQLITE_DB_FILE = "sqlite.db"
 SQLITE_JSON_OUTPUT_FILE = "sqlite.json"
-COMMIT_MESSAGE_TEMPLATE = "Update sqlite.json: Iteration {iteration} on {date}"
 
 
 # Scraper Class
@@ -145,39 +144,6 @@ class SQLiteWriter:
         conn.close()
 
 
-# Git Automation Functions
-def get_iteration_count(file_path):
-    try:
-        result = subprocess.run(["git", "log", "--pretty=format:%s", file_path], capture_output=True, text=True)
-        messages = result.stdout.splitlines()
-        iteration_numbers = [int(line.split("Iteration")[1].split("on")[0].strip()) for line in messages if "Iteration" in line]
-        return max(iteration_numbers, default=0) + 1
-    except Exception:
-        return 1
-
-
-def commit_and_push(file_path, iteration):
-    repo_path = os.getenv("GAD_REPO_PATH")
-    github_repo_url = os.getenv("GAD_REPO_URL")
-    pat = os.getenv("GAD_GET_PAT")
-
-    if not repo_path or not github_repo_url or not pat:
-        raise ValueError("Environment variables not set.")
-
-    date_str = datetime.now().strftime("%c")
-    commit_message = COMMIT_MESSAGE_TEMPLATE.format(iteration=iteration, date=date_str)
-
-    git_env = os.environ.copy()
-    git_env["GIT_DIR"] = os.path.join(repo_path, ".git")
-    git_env["GIT_WORK_TREE"] = repo_path
-
-    subprocess.run(["git", "add", file_path], env=git_env, cwd=repo_path, check=True)
-    subprocess.run(["git", "commit", "-m", commit_message], env=git_env, cwd=repo_path, check=True)
-
-    repo_with_auth = github_repo_url.replace("https://", f"https://{pat}@")
-    subprocess.run(["git", "push", repo_with_auth], env=git_env, cwd=repo_path, check=True)
-
-
 # Main Process
 if __name__ == "__main__":
     scraper = Scraper()
@@ -191,6 +157,3 @@ if __name__ == "__main__":
 
     sqlite_writer = SQLiteWriter(input_file=TRANSFORMER_OUTPUT_FILE, db_file=SQLITE_DB_FILE, output_file=SQLITE_JSON_OUTPUT_FILE)
     sqlite_writer.run()
-
-    iteration_count = get_iteration_count(SQLITE_JSON_OUTPUT_FILE)
-    commit_and_push(SQLITE_JSON_OUTPUT_FILE, iteration_count)
